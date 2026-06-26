@@ -89,6 +89,16 @@ services:
         "migrate -path /migrations -database \"$DATABASE_URL?x-migrations-table=schema_migrations\" up"
       ]
 
+  runner:
+    build:
+      context: .
+      dockerfile: Dockerfile.runner
+    env_file:
+      - .env
+    container_name: php_runner
+    networks:
+      - app_network
+
 volumes:
   redis_data:
   minio_data:

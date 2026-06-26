@@ -1,5 +1,6 @@
 CREATE TABLE students (
     id INT AUTO_INCREMENT PRIMARY KEY,
+    external_id BINARY(16) NOT NULL INDEX,
     first_name VARCHAR(255) NOT NULL,
     last_name VARCHAR(255) NOT NULL,
     gender CHAR(1) NOT NULL,

@@ -1,0 +1,22 @@
+FROM php:8.3-cli
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y \
+    unzip \
+    git \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
+
+COPY app/composer.json app/composer.lock* ./
+
+RUN composer config -g disable-tls false
+RUN composer config -g secure-http true
+
+RUN composer install --no-interaction --prefer-source
+
+COPY app/ ./
+
+CMD ["php", "main.php"]

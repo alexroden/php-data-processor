@@ -9,5 +9,8 @@ setup:
 	@docker compose -p processor up -d seed-sqs
 	@docker compose -p processor up -d migrate
 
+start:
+	@docker compose -p processor up -d runner --build
+
 cleanup:
 	@docker compose -p processor down -v --rmi all
