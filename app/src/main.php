@@ -3,8 +3,11 @@
 require __DIR__ . '/../vendor/autoload.php';
 
 use App\Repositories\AwsS3ClientAdapter;
+use App\Repositories\AwsSqsClientAdapter;
+use App\Services\Sqs;
 use Aws\S3\S3Client;
 use App\Services\S3;
+use Aws\Sqs\SqsClient;
 use Psr\Http\Message\StreamInterface;
 
 
@@ -47,6 +50,18 @@ function main(): void
 
     $s3 = new S3(new AwsS3ClientAdapter($s3Client));
 
+    $sqsClient = new SqsClient([
+        'version' => 'latest',
+        'region'  => getenv('AWS_DEFAULT_REGION') ?: 'eu-west-1',
+        'endpoint' => getenv('SQS_URL'),
+        'credentials' => [
+            'key'    => getenv('AWS_ACCESS_KEY_ID'),
+            'secret' => getenv('AWS_SECRET_ACCESS_KEY'),
+        ],
+    ]);
+
+    $sqs = new Sqs(new AwsSqsClientAdapter($sqsClient),  getenv('SQS_QUEUE_URL'));
+
     $files = $s3->listCsvFiles($bucket);
 
     if (empty($files)) {
@@ -80,7 +95,10 @@ function main(): void
         $rowCount = countCsvRows($csv);
 
         echo "Row count: {$rowCount}\n";
+
+        $sqs->addBatches($file, $rowCount, 250);
     }
+
 
     echo "Done.\n";
 }

@@ -45,11 +45,11 @@ services:
       - sqs
     entrypoint:
       - aws
-      - --endpoint-url=http://sqs:9324
+      - --endpoint-url=${SQS_URL}
       - sqs
       - create-queue
       - --queue-name
-      - processing-queue
+      - ${QUEUE_NAME}
       - --region
       - ${AWS_DEFAULT_REGION}
     environment:
