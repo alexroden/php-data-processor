@@ -1,6 +1,8 @@
 <?php
 
-namespace src\Repositories;
+namespace App\Repositories;
+
+use Aws\S3\S3Client;
 
 final class AwsS3ClientAdapter implements S3ClientInterface
 {

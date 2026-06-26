@@ -1,8 +1,9 @@
 <?php
 
-namespace src\Services;
+namespace App\Services;
 
-use src\Repositories\S3ClientInterface;
+use App\Repositories\S3ClientInterface;
+use Psr\Http\Message\StreamInterface;
 
 final class S3
 {
@@ -25,13 +26,13 @@ final class S3
         return $files;
     }
 
-    public function getObject(string $bucket, string $key): string
+    public function getObject(string $bucket, string $key): StreamInterface
     {
         $result = $this->client->getObject([
             'Bucket' => $bucket,
             'Key'    => $key,
         ]);
 
-        return (string) $result['Body'];
+        return $result['Body'];
     }
 }

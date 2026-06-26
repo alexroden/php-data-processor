@@ -1,6 +1,6 @@
 <?php
 
-namespace src\Repositories;
+namespace App\Repositories;
 
 interface S3ClientInterface
 {
