@@ -1,6 +1,6 @@
-CREATE TABLE students_guardians (
+CREATE TABLE student_guardians (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    student_id INT NOT NULL,
+    student_id INT NOT NULL UNIQUE,
     name VARCHAR(255) NOT NULL,
     phone VARCHAR(20),
     email VARCHAR(255),
@@ -10,7 +10,7 @@ CREATE TABLE students_guardians (
 
     INDEX idx_student_id (student_id),
 
-    CONSTRAINT fk_students_guardians_student
+    CONSTRAINT fk_student_guardians_student
         FOREIGN KEY (student_id) REFERENCES students(id)
             ON DELETE CASCADE
 );

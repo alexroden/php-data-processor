@@ -1,1 +1,1 @@
-DROP TABLE students_guardians;
+DROP TABLE student_guardians;

@@ -83,7 +83,7 @@ function main(): void
     ");
 
     $guardianStmt = $pdo->prepare("
-        INSERT INTO students_guardians (
+        INSERT INTO student_guardians (
             student_id,
             name,
             phone,
@@ -94,6 +94,10 @@ function main(): void
             :phone,
             :email
         )
+        ON DUPLICATE KEY UPDATE
+            name = VALUES(name),
+            phone = VALUES(phone),
+            email = VALUES(email)
     ");
 
 
@@ -151,7 +155,7 @@ function main(): void
                     ]);
 
                     $getIdStmt->execute([
-                        'external_id' => $row[0]
+                        'external_id' => $row[STUDENT_EXTERNAL_ID],
                     ]);
 
                     $studentId = $getIdStmt->fetchColumn();
