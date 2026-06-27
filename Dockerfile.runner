@@ -17,4 +17,4 @@ RUN composer install --no-interaction --prefer-dist --no-dev
 # THEN copy source code
 COPY app/ ./
 
-CMD ["php", "src/runner/main.php"]
+CMD ["php", "runner/main.php"]

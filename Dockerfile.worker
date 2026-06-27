@@ -20,4 +20,4 @@ RUN composer install --no-interaction --prefer-dist --no-dev
 # THEN copy source code
 COPY app/ ./
 
-CMD ["php", "src/worker/main.php"]
+CMD ["php", "worker/main.php"]

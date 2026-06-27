@@ -10,10 +10,13 @@ setup:
 	@docker compose -p processor up -d migrate
 
 start-workers:
-	@docker compose -p processor up -d --build --scale worker=4
+	@docker compose -p processor up -d --build --scale worker=4 worker
 
 trigger-runner:
-	@docker compose -p processor up -d runner --build
+	@docker compose -p processor up -d --build runner
 
 cleanup:
-	@docker compose -p processor down -v --rmi all
+	@docker compose -p processor down \
+		--volumes \
+		--remove-orphans \
+		--rmi local
