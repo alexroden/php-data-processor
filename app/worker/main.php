@@ -2,11 +2,11 @@
 
 use App\Adapters\AwsS3ClientAdapter;
 use App\Adapters\AwsSqsClientAdapter;
+use App\Importers\StudentImporter;
+use App\Importers\StudentSubjectImporter;
 use App\Services\S3;
-use App\Services\StudentImporter;
-use App\Services\StudentSubjectImporter;
-use App\Worker\Worker;
 use App\Services\Sqs;
+use App\Worker\Worker;
 use Aws\S3\S3Client;
 use Aws\Sqs\SqsClient;
 

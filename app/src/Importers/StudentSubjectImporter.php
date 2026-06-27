@@ -1,12 +1,15 @@
 <?php
 
-namespace App\Services;
+namespace App\Importers;
 
+use App\Importers\Traits\FailedJobs;
 use App\Interfaces\ImporterInterface;
 use PDO;
 
 final class StudentSubjectImporter implements ImporterInterface
 {
+    use FailedJobs;
+
     const STUDENT_SUBJECT_EXTERNAL_ID = 0;
     const STUDENT_SUBJECT_QUALIFICATION = 1;
     const STUDENT_SUBJECT_SUBJECT = 2;
@@ -60,5 +63,10 @@ final class StudentSubjectImporter implements ImporterInterface
                 'actual_grade'     => $row[self::STUDENT_SUBJECT_ACTUAL_GRADE] ?? null,
             ]);
         }
+    }
+
+    public function getPdo(): \PDO
+    {
+        return $this->pdo;
     }
 }

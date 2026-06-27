@@ -1,13 +1,16 @@
 <?php
 
-namespace App\Services;
+namespace App\Importers;
 
+use App\Importers\Traits\FailedJobs;
 use App\Interfaces\ImporterInterface;
 use DateTime;
 use PDO;
 
 final class StudentImporter implements ImporterInterface
 {
+    use FailedJobs;
+
     const STUDENT_EXTERNAL_ID = 0;
     const STUDENT_FIRSTNAME = 1;
     const STUDENT_LASTNAME = 2;
@@ -79,7 +82,10 @@ final class StudentImporter implements ImporterInterface
             };
 
             if ($gender === null) {
-                echo "SKIP gender: " . json_encode($row) . PHP_EOL;
+                $e = "SKIP gender: " . json_encode($row) . PHP_EOL;
+                $this->submitFailedJob($row[self::STUDENT_EXTERNAL_ID], 'student', $e);
+
+                echo $e;
                 continue;
             }
 
@@ -89,7 +95,10 @@ final class StudentImporter implements ImporterInterface
                 ?: DateTime::createFromFormat('Y-m-d', $dateRaw);
 
             if (!$date) {
-                echo "BAD DATE: " . $dateRaw . PHP_EOL;
+                $e = "BAD DATE: " . $dateRaw . PHP_EOL;
+                $this->submitFailedJob($row[self::STUDENT_EXTERNAL_ID], 'student', $e);
+
+                echo $e;
                 continue;
             }
 
@@ -107,6 +116,10 @@ final class StudentImporter implements ImporterInterface
             $studentId = $getId->fetchColumn();
 
             if (!$studentId) {
+                $e = "Unable to get student". PHP_EOL;
+                $this->submitFailedJob($row[self::STUDENT_EXTERNAL_ID], 'student', $e);
+
+                echo $e;
                 continue;
             }
 
@@ -117,5 +130,10 @@ final class StudentImporter implements ImporterInterface
                 'email'      => $row[self::STUDENT_PARENT_EMAIL],
             ]);
         }
+    }
+
+    public function getPdo(): \PDO
+    {
+        return $this->pdo;
     }
 }

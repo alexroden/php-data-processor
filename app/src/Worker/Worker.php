@@ -7,15 +7,15 @@ use App\Interfaces\S3Interface;
 use App\Interfaces\SqsInterface;
 use PDO;
 
-final class Worker
+final readonly class Worker
 {
     public function __construct(
-        private readonly SqsInterface      $sqs,
-        private readonly S3Interface       $s3,
-        private readonly PDO               $pdo,
-        private readonly string            $bucket,
-        private readonly ImporterInterface $students,
-        private readonly ImporterInterface $subjects,
+        private SqsInterface      $sqs,
+        private S3Interface       $s3,
+        private PDO               $pdo,
+        private string            $bucket,
+        private ImporterInterface $students,
+        private ImporterInterface $subjects,
     )
     {
     }
@@ -46,21 +46,41 @@ final class Worker
         foreach ($messages as $message) {
             $this->processMessage($message);
         }
+
+        echo "Done.\n";
     }
 
     private function processMessage(array $message): void
     {
-        $body = json_decode($message['Body'], true, flags: JSON_THROW_ON_ERROR);
+        try {
+            $body = json_decode($message['Body'], true, flags: JSON_THROW_ON_ERROR);
 
-        $csv = $this->s3->getObject($this->bucket, $body['file']);
-        $rows = $this->processCsv($csv);
+            echo sprintf(
+                "Processing batch %d: %s\n",
+                $body['batch'],
+                $body['file'],
+            );
 
-        $this->route($body['type'], $rows);
+            $csv = $this->s3->getObject($this->bucket, $body['file']);
+            $rows = $this->processCsv($csv);
 
-        $this->sqs->deleteMessage($message['ReceiptHandle']);
-        $this->s3->deleteObject($this->bucket, $body['file']);
+            $this->route($body['type'], $rows);
+        }  catch (\JsonException $e) {
+            echo "INVALID JSON MESSAGE: {$e->getMessage()}\n";
+            $this->sqs->deleteMessage($message['ReceiptHandle']);
+            return;
+        } catch (\Throwable $e) {
+            echo "FAILED MESSAGE: {$e->getMessage()}\n";
+            // @TODO: Failed jobs
+            return;
+        }
+
+        $this->safeCleanup($message, $body['file']);
     }
 
+    /**
+     * @throws \Exception
+     */
     private function route(string $type, array $rows): void
     {
         match ($type) {
@@ -92,4 +112,22 @@ final class Worker
 
         return $rows;
     }
+
+    private function safeCleanup(array $message, string $file): void
+    {
+        try {
+            $this->sqs->deleteMessage($message['ReceiptHandle']);
+        } catch (\Throwable $e) {
+            echo "Failed to delete message: {$e->getMessage()}\n";
+        }
+
+        try {
+            $this->s3->deleteObject($this->bucket, $file);
+        } catch (\Throwable $e) {
+            echo "Failed to delete file: {$e->getMessage()}\n";
+        }
+    }
+
+
+
 }
