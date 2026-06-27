@@ -104,7 +104,6 @@ services:
       dockerfile: Dockerfile.worker
     env_file:
       - .env
-    container_name: php_worker
     networks:
       - app_network
 

@@ -70,36 +70,36 @@ function main(): void
             }
 
             foreach ($messages as $message) {
-
                 $body = json_decode($message['Body'], true, flags: JSON_THROW_ON_ERROR);
 
+                echo "Worker " . getmypid() . " processing batch {$body['batch']}\n";
+
                 echo sprintf(
-                    "Processing batch %d: %s (%d-%d)\n",
+                    "Processing batch %d: %s\n",
                     $body['batch'],
-                    $body['file'],
-                    $body['start'],
-                    $body['end']
+                    $body['file']
                 );
 
                 $csv = $s3->getObject($bucket, $body['file']);
                 $rows = processCsv($csv);
 
-                $batchRows = array_slice($rows, $body['start'], $body['end'] - $body['start']);
-
                 switch ($body['type']) {
                     case 'students':
-                        processStudents($batchRows, $pdo);
+                        processStudents($rows, $pdo);
                         break;
-
                     case 'student_subjects_grades':
-                        processSubjects($batchRows, $pdo);
+                        processSubjects($rows, $pdo);
                         break;
-
                     default:
-                        throw new Exception("Unknown file type: {$body['type']}");
+                        $e = new Exception("Unknown file type: {$body['type']}");
+                        echo $e->getMessage();
                 }
 
-                $sqs->deleteMessage($message['ReceiptHandle']);
+                try {
+                    $sqs->deleteMessage($message['ReceiptHandle']);
+                } catch (Throwable $e) {
+                    echo $e->getMessage();
+                }
             }
         } catch (Throwable $e) {
             echo "Worker error: " . $e->getMessage() . PHP_EOL;
@@ -166,31 +166,60 @@ function processStudents(array $rows, PDO $pdo): void
             default => null,
         };
 
-        if ($gender === null) continue;
+        if ($gender === null) {
+            echo "SKIP gender: " . json_encode($row) . PHP_EOL;
+            continue;
+        }
 
-        $date = DateTime::createFromFormat('d/m/Y', trim($row[STUDENT_ADMISSION_DATE]));
-        if (!$date) continue;
+        $dateRaw = trim($row[STUDENT_ADMISSION_DATE] ?? '');
 
-        $studentsStmt->execute([
-            'external_id'    => $row[STUDENT_EXTERNAL_ID],
-            'first_name'     => $row[STUDENT_FIRSTNAME],
-            'last_name'      => $row[STUDENT_LASTNAME],
-            'gender'         => $gender,
-            'admission_date' => $date->format('Y-m-d H:i:s'),
-        ]);
+        $date = DateTime::createFromFormat('d/m/Y', $dateRaw)
+            ?: DateTime::createFromFormat('Y-m-d', $dateRaw);
 
-        $getIdStmt->execute([
-            'external_id' => $row[STUDENT_EXTERNAL_ID],
-        ]);
+        if (!$date) {
+            echo "BAD DATE: " . $dateRaw . PHP_EOL;
+            continue;
+        }
+
+        try {
+            $studentsStmt->execute([
+                'external_id'    => $row[STUDENT_EXTERNAL_ID],
+                'first_name'     => $row[STUDENT_FIRSTNAME],
+                'last_name'      => $row[STUDENT_LASTNAME],
+                'gender'         => $gender,
+                'admission_date' => $date->format('Y-m-d H:i:s'),
+            ]);
+        } catch (Throwable $e) {
+            echo "DB ERROR ROW: " . json_encode($row) . PHP_EOL;
+            echo $e->getMessage() . PHP_EOL;
+        }
+
+        try {
+            $getIdStmt->execute([
+                'external_id' => $row[STUDENT_EXTERNAL_ID],
+            ]);
+        } catch (Throwable $e) {
+            echo "DB ERROR ROW: " . json_encode($row) . PHP_EOL;
+            echo $e->getMessage() . PHP_EOL;
+        }
 
         $studentId = $getIdStmt->fetchColumn();
+        if (!$studentId) {
+            echo "MISSING STUDENT for external_id: " . $row[STUDENT_EXTERNAL_ID] . PHP_EOL;
+            continue;
+        }
 
-        $guardianStmt->execute([
-            'student_id' => $studentId,
-            'name'       => $row[STUDENT_PARENT_NAME],
-            'phone'      => $row[STUDENT_PARENT_PHONE],
-            'email'      => $row[STUDENT_PARENT_EMAIL],
-        ]);
+        try {
+            $guardianStmt->execute([
+                'student_id' => $studentId,
+                'name'       => $row[STUDENT_PARENT_NAME],
+                'phone'      => $row[STUDENT_PARENT_PHONE],
+                'email'      => $row[STUDENT_PARENT_EMAIL],
+            ]);
+        } catch (Throwable $e) {
+            echo "DB ERROR ROW: " . json_encode($row) . PHP_EOL;
+            echo $e->getMessage() . PHP_EOL;
+        }
     }
 }
 
@@ -215,12 +244,16 @@ function processSubjects(array $rows, PDO $pdo): void
             actual_grade = VALUES(actual_grade)
     ");
 
-    $getIdStmt = $pdo->prepare("
-        SELECT id
-        FROM students
-        WHERE external_id = :external_id
-        LIMIT 1
-    ");
+    try {
+        $getIdStmt = $pdo->prepare("
+            SELECT id
+            FROM students
+            WHERE external_id = :external_id
+            LIMIT 1
+        ");
+    } catch (Throwable $e) {
+        echo "DB ERROR: " . $e->getMessage() . PHP_EOL;
+    }
 
     foreach ($rows as $row) {
         $getIdStmt->execute([
@@ -229,13 +262,17 @@ function processSubjects(array $rows, PDO $pdo): void
 
         $studentId = $getIdStmt->fetchColumn();
 
-        $stmt->execute([
-            'student_id'        => $studentId,
-            'qualification'     => $row[STUDENT_SUBJECT_QUALIFICATION],
-            'subject'           => $row[STUDENT_SUBJECT_SUBJECT],
-            'predicted_grade'   => $row[STUDENT_SUBJECT_PREDICTED_GRADE] ?? null,
-            'actual_grade'     => $row[STUDENT_SUBJECT_ACTUAL_GRADE] ?? null,
-        ]);
+        try {
+            $stmt->execute([
+                'student_id'        => $studentId,
+                'qualification'     => $row[STUDENT_SUBJECT_QUALIFICATION],
+                'subject'           => $row[STUDENT_SUBJECT_SUBJECT],
+                'predicted_grade'   => $row[STUDENT_SUBJECT_PREDICTED_GRADE] ?? null,
+                'actual_grade'     => $row[STUDENT_SUBJECT_ACTUAL_GRADE] ?? null,
+            ]);
+        } catch (Throwable $e) {
+            echo "DB ERROR: " . $e->getMessage() . PHP_EOL;
+        }
     }
 }
 

@@ -8,41 +8,21 @@ final class Sqs
 {
     public function __construct(private SqsClientInterface $client, private string $queueUrl) {}
 
-    public function addBatches(string $file, string $type, int $totalRows, int $batchSize): void
+    /**
+     * @throws \JsonException
+     */
+    public function addMessage(string $file, string $type, int $chunkIndex): void
     {
-        $batchIndex = 0;
-        foreach ($this->createBatches($totalRows, $batchSize) as $batch) {
-            $message = [
-                'file'  => $file,
-                'type'  => $type,
-                'start' => $batch['start'],
-                'end'   => $batch['end'],
-                'batch' => $batchIndex,
-            ];
+        $message = [
+            'file' => $file,
+            'type' => $type,
+            'batch' => $chunkIndex,
+        ];
 
-            echo "Sending batch: " . json_encode($message) . "\n";
-
-            $this->client->sendMessage([
-                'QueueUrl' => $this->queueUrl,
-                'MessageBody' => json_encode($message),
-            ]);
-
-            $batchIndex++;
-        }
-    }
-
-    private function createBatches(int $totalRows, int $batchSize): array
-    {
-        $batches = [];
-
-        for ($start = 0; $start < $totalRows; $start += $batchSize) {
-            $batches[] = [
-                'start' => $start,
-                'end'   => min($start + $batchSize, $totalRows),
-            ];
-        }
-
-        return $batches;
+        $this->client->sendMessage([
+            'QueueUrl'    => $this->queueUrl,
+            'MessageBody' => json_encode($message, JSON_THROW_ON_ERROR),
+        ]);
     }
 
     public function receiveMessages(): array

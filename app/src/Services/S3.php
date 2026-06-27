@@ -35,4 +35,13 @@ final class S3
 
         return $result['Body'];
     }
+
+    public function putObject(string $bucket, string $key, string $body): void
+    {
+        $this->client->putObject([
+            'Bucket' => $bucket,
+            'Key'    => $key,
+            'Body'   => $body,
+        ]);
+    }
 }

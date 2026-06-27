@@ -2,6 +2,7 @@
 
 namespace App\Repositories;
 
+use Aws\Result;
 use Aws\S3\S3Client;
 
 final class AwsS3ClientAdapter implements S3ClientInterface
@@ -16,5 +17,10 @@ final class AwsS3ClientAdapter implements S3ClientInterface
     public function getObject(array $args = []): array
     {
         return $this->client->getObject($args)->toArray();
+    }
+
+    public function putObject(array $args = []): Result
+    {
+        return $this->client->putObject($args);
     }
 }

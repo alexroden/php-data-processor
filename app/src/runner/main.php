@@ -71,13 +71,37 @@ function main(): void
 
         $csv = $s3->getObject($bucket, $file);
 
-        $rowCount = countCsvRows($csv);
-
-        echo "Row count: {$rowCount}\n";
+        $chunks = splitCsvIntoChunks($csv, 250);
 
         $type = preg_replace('/\.csv$/', '', basename($file));
 
-        $sqs->addBatches($file, $type, $rowCount, 250);
+        $chunkIndex = 0;
+        foreach ($chunks as $chunkPath) {
+            $key = sprintf(
+                "/assets/%s/chunk-%04d-%s.csv",
+                $type,
+                $chunkIndex,
+                uniqid()
+            );
+
+            $s3->putObject(
+                $bucket,
+                $key,
+                file_get_contents($chunkPath)
+            );
+
+            unlink($chunkPath);
+
+            echo "Uploaded chunk: {$key}\n";
+
+            try {
+                $sqs->addMessage($key, $type, $chunkIndex);
+            } catch (JsonException $e) {
+                echo "JSON ERROR: " . $e->getMessage() . PHP_EOL;
+            }
+
+            $chunkIndex++;
+        }
     }
 
     echo "Done.\n";
@@ -85,22 +109,46 @@ function main(): void
 
 main();
 
+function splitCsvIntoChunks(
+    StreamInterface $stream,
+    int $rowsPerFile = 250
+): array {
+    $files = [];
 
-function countCsvRows(StreamInterface $body): int
-{
-    $count = 0;
+    $temp = fopen('php://temp', 'r+');
+    stream_copy_to_stream($stream->detach(), $temp);
+    rewind($temp);
 
-    $stream = fopen('php://temp', 'r+');
-    stream_copy_to_stream($body->detach(), $stream);
-    rewind($stream);
+    $header = fgetcsv($temp, 0, ',', '"', '\\');
 
-    while (($row = fgetcsv($stream, 0, ",", "\"", "\\")) !== false) {
-        if ($row && count($row) > 1) {
-            $count++;
+    $rowCount = 0;
+    $current = null;
+
+    while (($row = fgetcsv($temp, 0, ',', '"', '\\')) !== false) {
+
+        if ($rowCount % $rowsPerFile === 0) {
+
+            if ($current) {
+                fclose($current);
+            }
+
+            $path = sys_get_temp_dir() . '/chunk-' . uniqid() . '.csv';
+
+            $current = fopen($path, 'w');
+            $files[] = $path;
+
+            fputcsv($current, $header, ',', '"', '\\');
         }
+
+        fputcsv($current, $row, ',', '"', '\\');
+        $rowCount++;
     }
 
-    fclose($stream);
+    if ($current) {
+        fclose($current);
+    }
 
-    return $count;
+    fclose($temp);
+
+    return $files;
 }
