@@ -11,4 +11,6 @@ interface S3ClientInterface
     public function getObject(array $args = []): array;
 
     public function putObject(array $args = []): Result;
+
+    public function deleteObject(array $args = []): Result;
 }

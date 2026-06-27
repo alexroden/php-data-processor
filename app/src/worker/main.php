@@ -100,6 +100,12 @@ function main(): void
                 } catch (Throwable $e) {
                     echo $e->getMessage();
                 }
+
+                try {
+                    $s3->deleteObject($bucket, $body['file']);
+                } catch (Throwable $e) {
+                    echo $e->getMessage();
+                }
             }
         } catch (Throwable $e) {
             echo "Worker error: " . $e->getMessage() . PHP_EOL;

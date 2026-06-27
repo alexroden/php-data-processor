@@ -44,4 +44,12 @@ final class S3
             'Body'   => $body,
         ]);
     }
+
+    public function deleteObject(string $bucket, string $key): void
+    {
+        $this->client->deleteObject([
+            'Bucket' => $bucket,
+            'Key'    => $key,
+        ]);
+    }
 }

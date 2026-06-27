@@ -23,4 +23,9 @@ final class AwsS3ClientAdapter implements S3ClientInterface
     {
         return $this->client->putObject($args);
     }
+
+    public function deleteObject(array $args = []): Result
+    {
+        return $this->client->deleteObject($args);
+    }
 }
