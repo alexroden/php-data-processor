@@ -31,12 +31,20 @@ final readonly class Runner
         $this->sortFiles($files);
 
         foreach ($files as $file) {
-            $this->processFile($file);
+            try {
+                $this->processFile($file);
+            } catch (\Throwable $e) {
+                echo "FAILED file {$file}: {$e->getMessage()}\n";
+                continue;
+            }
         }
 
         echo "Done.\n";
     }
 
+    /**
+     * @throws \Throwable
+     */
     private function processFile(string $file): void
     {
         echo "Processing: {$file}\n";
@@ -57,17 +65,21 @@ final readonly class Runner
                 uniqid()
             );
 
-            $this->s3->putObject(
-                $this->bucket,
-                $key,
-                file_get_contents($chunkPath)
-            );
+            $content = file_get_contents($chunkPath);
 
-            unlink($chunkPath);
+            $this->retry(function () use ($content, $key) {
+                $this->s3->putObject($this->bucket, $key, $content);
+            });
+
+            if (file_exists($chunkPath)) {
+                unlink($chunkPath);
+            }
 
             echo "Uploaded chunk: {$key}\n";
 
-            $this->sqs->addMessage($key, $type, $chunkIndex);
+            $this->retry(function () use ($key, $type, $chunkIndex) {
+                $this->sqs->addMessage($key, $type, $chunkIndex);
+            });
 
             $chunkIndex++;
         }
@@ -88,5 +100,32 @@ final readonly class Runner
 
             return $pa <=> $pb ?: $a <=> $b;
         });
+    }
+
+    /**
+     * @throws \Throwable
+     */
+    private function retry(callable $fn): void
+    {
+        $delayMs = 100;
+        $attempt = 0;
+
+        start:
+        try {
+            $fn();
+            return;
+        } catch (\Throwable $e) {
+            $attempt++;
+
+            if ($attempt >= 3) {
+                throw $e;
+            }
+
+            usleep($delayMs * 1000);
+
+            $delayMs *= 2;
+
+            goto start;
+        }
     }
 }

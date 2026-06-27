@@ -5,6 +5,7 @@ require __DIR__ . '/../vendor/autoload.php';
 use App\Runner\Runner;
 use App\Adapters\AwsS3ClientAdapter;
 use App\Adapters\AwsSqsClientAdapter;
+use App\Services\CsvChunker;
 use App\Services\S3;
 use App\Services\Sqs;
 use Aws\S3\S3Client;
@@ -36,7 +37,8 @@ $sqsClient = new SqsClient([
 $runner = new Runner(
     new S3(new AwsS3ClientAdapter($s3Client)),
     new Sqs(new AwsSqsClientAdapter($sqsClient), getenv('SQS_QUEUE_URL')),
-    $bucket
+    new CsvChunker(),
+    $bucket,
 );
 
 $runner->run();
