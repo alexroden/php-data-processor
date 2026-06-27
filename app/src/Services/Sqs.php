@@ -8,12 +8,13 @@ final class Sqs
 {
     public function __construct(private SqsClientInterface $client, private string $queueUrl) {}
 
-    public function addBatches(string $file, int $totalRows, int $batchSize): void
+    public function addBatches(string $file, string $type, int $totalRows, int $batchSize): void
     {
         $batchIndex = 0;
         foreach ($this->createBatches($totalRows, $batchSize) as $batch) {
             $message = [
                 'file'  => $file,
+                'type'  => $type,
                 'start' => $batch['start'],
                 'end'   => $batch['end'],
                 'batch' => $batchIndex,

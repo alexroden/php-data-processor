@@ -75,7 +75,9 @@ function main(): void
 
         echo "Row count: {$rowCount}\n";
 
-        $sqs->addBatches($file, $rowCount, 250);
+        $type = preg_replace('/\.csv$/', '', basename($file));
+
+        $sqs->addBatches($file, $type, $rowCount, 250);
     }
 
     echo "Done.\n";

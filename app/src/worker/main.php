@@ -21,6 +21,12 @@ const STUDENT_PARENT_NAME = 8;
 const STUDENT_PARENT_PHONE = 9;
 const STUDENT_PARENT_EMAIL = 10;
 
+const STUDENT_SUBJECT_EXTERNAL_ID = 0;
+const STUDENT_SUBJECT_QUALIFICATION = 1;
+const STUDENT_SUBJECT_SUBJECT = 2;
+const STUDENT_SUBJECT_PREDICTED_GRADE = 3;
+const STUDENT_SUBJECT_ACTUAL_GRADE = 4;
+
 function main(): void
 {
     $bucket = getenv('S3_BUCKET');
@@ -54,6 +60,58 @@ function main(): void
 
     $pdo = db();
 
+    while (true) {
+        try {
+            $messages = $sqs->receiveMessages();
+
+            if (empty($messages)) {
+                sleep(2);
+                continue;
+            }
+
+            foreach ($messages as $message) {
+
+                $body = json_decode($message['Body'], true, flags: JSON_THROW_ON_ERROR);
+
+                echo sprintf(
+                    "Processing batch %d: %s (%d-%d)\n",
+                    $body['batch'],
+                    $body['file'],
+                    $body['start'],
+                    $body['end']
+                );
+
+                $csv = $s3->getObject($bucket, $body['file']);
+                $rows = processCsv($csv);
+
+                $batchRows = array_slice($rows, $body['start'], $body['end'] - $body['start']);
+
+                switch ($body['type']) {
+                    case 'students':
+                        processStudents($batchRows, $pdo);
+                        break;
+
+                    case 'student_subjects_grades':
+                        processSubjects($batchRows, $pdo);
+                        break;
+
+                    default:
+                        throw new Exception("Unknown file type: {$body['type']}");
+                }
+
+                $sqs->deleteMessage($message['ReceiptHandle']);
+            }
+        } catch (Throwable $e) {
+            echo "Worker error: " . $e->getMessage() . PHP_EOL;
+            sleep(5);
+        }
+    }
+}
+
+main();
+
+function processStudents(array $rows, PDO $pdo): void
+{
     $studentsStmt = $pdo->prepare("
         INSERT INTO students (
             external_id,
@@ -100,84 +158,86 @@ function main(): void
             email = VALUES(email)
     ");
 
+    foreach ($rows as $row) {
+        $genderRaw = strtoupper(trim($row[STUDENT_GENDER]));
+        $gender = match ($genderRaw) {
+            'M', 'MALE' => 'M',
+            'F', 'FEMALE' => 'F',
+            default => null,
+        };
 
-    while (true) {
-        try {
-            $messages = $sqs->receiveMessages();
+        if ($gender === null) continue;
 
-            if (empty($messages)) {
-                sleep(2);
-                continue;
-            }
+        $date = DateTime::createFromFormat('d/m/Y', trim($row[STUDENT_ADMISSION_DATE]));
+        if (!$date) continue;
 
-            foreach ($messages as $message) {
+        $studentsStmt->execute([
+            'external_id'    => $row[STUDENT_EXTERNAL_ID],
+            'first_name'     => $row[STUDENT_FIRSTNAME],
+            'last_name'      => $row[STUDENT_LASTNAME],
+            'gender'         => $gender,
+            'admission_date' => $date->format('Y-m-d H:i:s'),
+        ]);
 
-                $body = json_decode($message['Body'], true, flags: JSON_THROW_ON_ERROR);
+        $getIdStmt->execute([
+            'external_id' => $row[STUDENT_EXTERNAL_ID],
+        ]);
 
-                echo sprintf(
-                    "Processing batch %d: %s (%d-%d)\n",
-                    $body['batch'],
-                    $body['file'],
-                    $body['start'],
-                    $body['end']
-                );
+        $studentId = $getIdStmt->fetchColumn();
 
-                $csv = $s3->getObject($bucket, $body['file']);
-                $rows = processCsv($csv);
-
-                $batchRows = array_slice($rows, $body['start'], $body['end'] - $body['start']);
-
-                foreach ($batchRows as $row) {
-                    $genderRaw = strtoupper(trim($row[STUDENT_GENDER]));
-                    $gender = match ($genderRaw) {
-                        'M', 'MALE' => 'M',
-                        'F', 'FEMALE' => 'F',
-                        default => null,
-                    };
-                    if ($gender === null) {
-                        echo "Skipping invalid gender: {$row[STUDENT_GENDER]}\n";
-                        continue;
-                    }
-
-                    $date = DateTime::createFromFormat('d/m/Y', trim($row[STUDENT_ADMISSION_DATE]));
-                    if (!$date) {
-                        echo "Skipping invalid date: {$row[STUDENT_ADMISSION_DATE]}\n";
-                        continue;
-                    }
-                    $admissionDate = $date->format('Y-m-d H:i:s');
-
-                    $studentsStmt->execute([
-                        'external_id'    => $row[STUDENT_EXTERNAL_ID],
-                        'first_name'     => $row[STUDENT_FIRSTNAME],
-                        'last_name'      => $row[STUDENT_LASTNAME],
-                        'gender'         => $gender,
-                        'admission_date' => $admissionDate,
-                    ]);
-
-                    $getIdStmt->execute([
-                        'external_id' => $row[STUDENT_EXTERNAL_ID],
-                    ]);
-
-                    $studentId = $getIdStmt->fetchColumn();
-
-                    $guardianStmt->execute([
-                        'student_id' => $studentId,
-                        'name'       => $row[STUDENT_PARENT_NAME],
-                        'phone'      => $row[STUDENT_PARENT_PHONE],
-                        'email'      => $row[STUDENT_PARENT_EMAIL],
-                    ]);
-                }
-
-                $sqs->deleteMessage($message['ReceiptHandle']);
-            }
-        } catch (Throwable $e) {
-            echo "Worker error: " . $e->getMessage() . PHP_EOL;
-            sleep(5);
-        }
+        $guardianStmt->execute([
+            'student_id' => $studentId,
+            'name'       => $row[STUDENT_PARENT_NAME],
+            'phone'      => $row[STUDENT_PARENT_PHONE],
+            'email'      => $row[STUDENT_PARENT_EMAIL],
+        ]);
     }
 }
 
-main();
+function processSubjects(array $rows, PDO $pdo): void
+{
+    $stmt = $pdo->prepare("
+        INSERT INTO student_subjects (
+            student_id,
+            qualification,
+            subject,
+            predicted_grade,
+            actual_grade
+        ) VALUES (
+            :student_id,
+            :qualification,
+            :subject,
+            :predicted_grade,
+            :actual_grade
+        )
+        ON DUPLICATE KEY UPDATE
+            predicted_grade = VALUES(predicted_grade),
+            actual_grade = VALUES(actual_grade)
+    ");
+
+    $getIdStmt = $pdo->prepare("
+        SELECT id
+        FROM students
+        WHERE external_id = :external_id
+        LIMIT 1
+    ");
+
+    foreach ($rows as $row) {
+        $getIdStmt->execute([
+            'external_id' => $row[STUDENT_SUBJECT_EXTERNAL_ID],
+        ]);
+
+        $studentId = $getIdStmt->fetchColumn();
+
+        $stmt->execute([
+            'student_id'        => $studentId,
+            'qualification'     => $row[STUDENT_SUBJECT_QUALIFICATION],
+            'subject'           => $row[STUDENT_SUBJECT_SUBJECT],
+            'predicted_grade'   => $row[STUDENT_SUBJECT_PREDICTED_GRADE] ?? null,
+            'actual_grade'     => $row[STUDENT_SUBJECT_ACTUAL_GRADE] ?? null,
+        ]);
+    }
+}
 
 function db(): PDO {
     return new PDO(
