@@ -1,6 +1,6 @@
 <?php
 
-require __DIR__ . '/../vendor/autoload.php';
+require __DIR__ . '/../../vendor/autoload.php';
 
 use App\Repositories\AwsS3ClientAdapter;
 use App\Repositories\AwsSqsClientAdapter;
@@ -10,32 +10,11 @@ use App\Services\S3;
 use Aws\Sqs\SqsClient;
 use Psr\Http\Message\StreamInterface;
 
-
-// using fgetcsv scales better with larger files
-function countCsvRows(StreamInterface $body): int
-{
-    $count = 0;
-
-    $stream = fopen('php://temp', 'r+');
-    stream_copy_to_stream($body->detach(), $stream);
-    rewind($stream);
-
-    while (($row = fgetcsv($stream, 0, ",", "\"", "\\")) !== false) {
-        if ($row && count($row) > 1) {
-            $count++;
-        }
-    }
-
-    fclose($stream);
-
-    return $count;
-}
-
 function main(): void
 {
-    $bucket = 'processor';
+    $bucket = getenv('S3_BUCKET');
 
-    echo "Starting CSV worker...\n";
+    echo "Runner started...\n";
 
     $s3Client = new S3Client([
         'version' => 'latest',
@@ -99,8 +78,27 @@ function main(): void
         $sqs->addBatches($file, $rowCount, 250);
     }
 
-
     echo "Done.\n";
 }
 
 main();
+
+
+function countCsvRows(StreamInterface $body): int
+{
+    $count = 0;
+
+    $stream = fopen('php://temp', 'r+');
+    stream_copy_to_stream($body->detach(), $stream);
+    rewind($stream);
+
+    while (($row = fgetcsv($stream, 0, ",", "\"", "\\")) !== false) {
+        if ($row && count($row) > 1) {
+            $count++;
+        }
+    }
+
+    fclose($stream);
+
+    return $count;
+}

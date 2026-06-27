@@ -10,11 +10,13 @@ final class Sqs
 
     public function addBatches(string $file, int $totalRows, int $batchSize): void
     {
+        $batchIndex = 0;
         foreach ($this->createBatches($totalRows, $batchSize) as $batch) {
             $message = [
                 'file'  => $file,
                 'start' => $batch['start'],
                 'end'   => $batch['end'],
+                'batch' => $batchIndex,
             ];
 
             echo "Sending batch: " . json_encode($message) . "\n";
@@ -23,6 +25,8 @@ final class Sqs
                 'QueueUrl' => $this->queueUrl,
                 'MessageBody' => json_encode($message),
             ]);
+
+            $batchIndex++;
         }
     }
 
@@ -38,5 +42,24 @@ final class Sqs
         }
 
         return $batches;
+    }
+
+    public function receiveMessages(): array
+    {
+        $result = $this->client->receiveMessage([
+            'QueueUrl' => $this->queueUrl,
+            'MaxNumberOfMessages' => 10,
+            'WaitTimeSeconds' => 20,
+        ]);
+
+        return $result->get('Messages') ?? [];
+    }
+
+    public function deleteMessage(string $handle): void
+    {
+        $this->client->deleteMessage([
+            'QueueUrl' => $this->queueUrl,
+            'ReceiptHandle' => $handle,
+        ]);
     }
 }

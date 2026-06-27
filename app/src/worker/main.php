@@ -1,0 +1,214 @@
+<?php
+
+use App\Repositories\AwsS3ClientAdapter;
+use App\Repositories\AwsSqsClientAdapter;
+use App\Services\S3;
+use App\Services\Sqs;
+use Aws\S3\S3Client;
+use Aws\Sqs\SqsClient;
+
+require __DIR__ . '/../../vendor/autoload.php';
+
+const STUDENT_EXTERNAL_ID = 0;
+const STUDENT_FIRSTNAME = 1;
+const STUDENT_LASTNAME = 2;
+const STUDENT_GENDER = 3;
+const STUDENT_YEAR_GROUP = 4;
+const STUDENT_TUTOR_GROUP = 5;
+const STUDENT_ADMISSION_DATE = 6;
+const STUDENT_ADMISSION_PERCENTAGE = 7;
+const STUDENT_PARENT_NAME = 8;
+const STUDENT_PARENT_PHONE = 9;
+const STUDENT_PARENT_EMAIL = 10;
+
+function main(): void
+{
+    $bucket = getenv('S3_BUCKET');
+
+    echo "Worker started...\n";
+
+    $sqsClient = new SqsClient([
+        'version' => 'latest',
+        'region'  => getenv('AWS_DEFAULT_REGION') ?: 'eu-west-1',
+        'endpoint' => getenv('SQS_URL'),
+        'credentials' => [
+            'key'    => getenv('AWS_ACCESS_KEY_ID'),
+            'secret' => getenv('AWS_SECRET_ACCESS_KEY'),
+        ],
+    ]);
+
+    $sqs = new SQS(new AwsSqsClientAdapter($sqsClient), getenv('SQS_QUEUE_URL'));
+
+    $s3Client = new S3Client([
+        'version' => 'latest',
+        'region'  => getenv('AWS_DEFAULT_REGION') ?: 'eu-west-1',
+        'endpoint' => getenv('S3_URL'),
+        'use_path_style_endpoint' => true,
+        'credentials' => [
+            'key'    => getenv('AWS_ACCESS_KEY_ID'),
+            'secret' => getenv('AWS_SECRET_ACCESS_KEY'),
+        ],
+    ]);
+
+    $s3 = new S3(new AwsS3ClientAdapter($s3Client));
+
+    $pdo = db();
+
+    $studentsStmt = $pdo->prepare("
+        INSERT INTO students (
+            external_id,
+            first_name,
+            last_name,
+            gender,
+            admission_date
+        ) VALUES (
+            :external_id,
+            :first_name,
+            :last_name,
+            :gender,
+            :admission_date
+        )
+        ON DUPLICATE KEY UPDATE
+            first_name = VALUES(first_name),
+            last_name = VALUES(last_name),
+            gender = VALUES(gender),
+            admission_date = VALUES(admission_date)
+    ");
+
+    $getIdStmt = $pdo->prepare("
+        SELECT id
+        FROM students
+        WHERE external_id = :external_id
+        LIMIT 1
+    ");
+
+    $guardianStmt = $pdo->prepare("
+        INSERT INTO students_guardians (
+            student_id,
+            name,
+            phone,
+            email
+        ) VALUES (
+            :student_id,
+            :name,
+            :phone,
+            :email
+        )
+    ");
+
+
+    while (true) {
+        try {
+            $messages = $sqs->receiveMessages();
+
+            if (empty($messages)) {
+                sleep(2);
+                continue;
+            }
+
+            foreach ($messages as $message) {
+
+                $body = json_decode($message['Body'], true, flags: JSON_THROW_ON_ERROR);
+
+                echo sprintf(
+                    "Processing batch %d: %s (%d-%d)\n",
+                    $body['batch'],
+                    $body['file'],
+                    $body['start'],
+                    $body['end']
+                );
+
+                $csv = $s3->getObject($bucket, $body['file']);
+                $rows = processCsv($csv);
+
+                $batchRows = array_slice($rows, $body['start'], $body['end'] - $body['start']);
+
+                foreach ($batchRows as $row) {
+                    $genderRaw = strtoupper(trim($row[STUDENT_GENDER]));
+                    $gender = match ($genderRaw) {
+                        'M', 'MALE' => 'M',
+                        'F', 'FEMALE' => 'F',
+                        default => null,
+                    };
+                    if ($gender === null) {
+                        echo "Skipping invalid gender: {$row[STUDENT_GENDER]}\n";
+                        continue;
+                    }
+
+                    $date = DateTime::createFromFormat('d/m/Y', trim($row[STUDENT_ADMISSION_DATE]));
+                    if (!$date) {
+                        echo "Skipping invalid date: {$row[STUDENT_ADMISSION_DATE]}\n";
+                        continue;
+                    }
+                    $admissionDate = $date->format('Y-m-d H:i:s');
+
+                    $studentsStmt->execute([
+                        'external_id'    => $row[STUDENT_EXTERNAL_ID],
+                        'first_name'     => $row[STUDENT_FIRSTNAME],
+                        'last_name'      => $row[STUDENT_LASTNAME],
+                        'gender'         => $gender,
+                        'admission_date' => $admissionDate,
+                    ]);
+
+                    $getIdStmt->execute([
+                        'external_id' => $row[0]
+                    ]);
+
+                    $studentId = $getIdStmt->fetchColumn();
+
+                    $guardianStmt->execute([
+                        'student_id' => $studentId,
+                        'name'       => $row[STUDENT_PARENT_NAME],
+                        'phone'      => $row[STUDENT_PARENT_PHONE],
+                        'email'      => $row[STUDENT_PARENT_EMAIL],
+                    ]);
+                }
+
+                $sqs->deleteMessage($message['ReceiptHandle']);
+            }
+        } catch (Throwable $e) {
+            echo "Worker error: " . $e->getMessage() . PHP_EOL;
+            sleep(5);
+        }
+    }
+}
+
+main();
+
+function db(): PDO {
+    return new PDO(
+        sprintf(
+            'mysql:host=%s;dbname=%s;charset=utf8mb4',
+            getenv('MYSQL_HOST') ?: 'mysql',
+            getenv('MYSQL_DATABASE'),
+        ),
+        getenv('MYSQL_USER'),
+        getenv('MYSQL_PASSWORD'),
+        [
+            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+        ]
+    );
+}
+
+function processCsv(string $csv): array
+{
+    $stream = fopen('php://temp', 'r+');
+    fwrite($stream, $csv);
+    rewind($stream);
+
+    $rows = [];
+
+    fgetcsv($stream, 0, ',', '"', '\\');
+    while (($row = fgetcsv($stream, 0, ',', '"', '\\')) !== false) {
+        if ($row === [null] || $row === false) {
+            continue;
+        }
+
+        $rows[] = $row;
+    }
+
+    fclose($stream);
+
+    return $rows;
+}

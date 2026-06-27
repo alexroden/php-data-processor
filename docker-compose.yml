@@ -98,6 +98,15 @@ services:
     container_name: php_runner
     networks:
       - app_network
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    env_file:
+      - .env
+    container_name: php_worker
+    networks:
+      - app_network
 
 volumes:
   redis_data:

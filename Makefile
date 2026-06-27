@@ -1,4 +1,4 @@
-.PHONY:  cleanup
+.PHONY: cleanup start-worker trigger-runner cleanup
 
 setup:
 	@docker compose -p processor up -d minio
@@ -9,7 +9,10 @@ setup:
 	@docker compose -p processor up -d seed-sqs
 	@docker compose -p processor up -d migrate
 
-start:
+start-worker:
+	@docker compose -p processor up -d worker --build
+
+trigger-runner:
 	@docker compose -p processor up -d runner --build
 
 cleanup:
