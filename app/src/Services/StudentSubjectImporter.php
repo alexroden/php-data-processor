@@ -2,9 +2,10 @@
 
 namespace App\Services;
 
+use App\Interfaces\ImporterInterface;
 use PDO;
 
-final class StudentSubjectImporter
+final class StudentSubjectImporter implements ImporterInterface
 {
     const STUDENT_SUBJECT_EXTERNAL_ID = 0;
     const STUDENT_SUBJECT_QUALIFICATION = 1;

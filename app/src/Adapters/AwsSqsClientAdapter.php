@@ -1,7 +1,8 @@
 <?php
 
-namespace App\Repositories;
+namespace App\Adapters;
 
+use App\Interfaces\SqsClientInterface;
 use Aws\Result;
 use Aws\Sqs\SqsClient;
 

@@ -3,8 +3,8 @@
 require __DIR__ . '/../vendor/autoload.php';
 
 use App\Runner\Runner;
-use App\Repositories\AwsS3ClientAdapter;
-use App\Repositories\AwsSqsClientAdapter;
+use App\Adapters\AwsS3ClientAdapter;
+use App\Adapters\AwsSqsClientAdapter;
 use App\Services\S3;
 use App\Services\Sqs;
 use Aws\S3\S3Client;

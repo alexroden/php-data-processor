@@ -2,10 +2,11 @@
 
 namespace App\Services;
 
+use App\Interfaces\ImporterInterface;
 use DateTime;
 use PDO;
 
-final class StudentImporter
+final class StudentImporter implements ImporterInterface
 {
     const STUDENT_EXTERNAL_ID = 0;
     const STUDENT_FIRSTNAME = 1;

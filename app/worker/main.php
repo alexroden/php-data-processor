@@ -1,7 +1,7 @@
 <?php
 
-use App\Repositories\AwsS3ClientAdapter;
-use App\Repositories\AwsSqsClientAdapter;
+use App\Adapters\AwsS3ClientAdapter;
+use App\Adapters\AwsSqsClientAdapter;
 use App\Services\S3;
 use App\Services\StudentImporter;
 use App\Services\StudentSubjectImporter;

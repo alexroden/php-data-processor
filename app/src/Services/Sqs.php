@@ -2,9 +2,10 @@
 
 namespace App\Services;
 
-use App\Repositories\SqsClientInterface;
+use App\Interfaces\SqsClientInterface;
+use App\Interfaces\SqsInterface;
 
-final class Sqs
+final class Sqs implements SqsInterface
 {
     public function __construct(private SqsClientInterface $client, private string $queueUrl) {}
 

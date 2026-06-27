@@ -2,10 +2,11 @@
 
 namespace App\Services;
 
-use App\Repositories\S3ClientInterface;
+use App\Interfaces\S3ClientInterface;
+use App\Interfaces\S3Interface;
 use Psr\Http\Message\StreamInterface;
 
-final class S3
+final class S3 implements S3Interface
 {
     public function __construct(private S3ClientInterface $client) {}
 

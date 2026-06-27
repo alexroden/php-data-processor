@@ -4,15 +4,16 @@ namespace App\Runner;
 
 namespace App\Runner;
 
-use App\Services\S3;
-use App\Services\Sqs;
-use Psr\Http\Message\StreamInterface;
+use App\Interfaces\CsvChunkerInterface;
+use App\Interfaces\S3Interface;
+use App\Interfaces\SqsInterface;
 
 final readonly class Runner
 {
     public function __construct(
-        private S3     $s3,
-        private Sqs    $sqs,
+        private S3Interface     $s3,
+        private SqsInterface    $sqs,
+        private CsvChunkerInterface $chunker,
         private string $bucket,
     ) {}
 
@@ -42,7 +43,7 @@ final readonly class Runner
 
         $csv = $this->s3->getObject($this->bucket, $file);
 
-        $chunks = $this->splitCsvIntoChunks($csv);
+        $chunks = $this->chunker->split($csv);
 
         $type = preg_replace('/\.csv$/', '', basename($file));
 
@@ -87,48 +88,5 @@ final readonly class Runner
 
             return $pa <=> $pb ?: $a <=> $b;
         });
-    }
-
-    private function splitCsvIntoChunks(
-        StreamInterface $stream
-    ): array {
-        $files = [];
-
-        $temp = fopen('php://temp', 'r+');
-        stream_copy_to_stream($stream->detach(), $temp);
-        rewind($temp);
-
-        $header = fgetcsv($temp, 0, ',', '"', '\\');
-
-        $rowCount = 0;
-        $current = null;
-
-        while (($row = fgetcsv($temp, 0, ',', '"', '\\')) !== false) {
-
-            if ($rowCount % 250 === 0) {
-
-                if ($current) {
-                    fclose($current);
-                }
-
-                $path = sys_get_temp_dir() . '/chunk-' . uniqid() . '.csv';
-
-                $current = fopen($path, 'w');
-                $files[] = $path;
-
-                fputcsv($current, $header, ',', '"', '\\');
-            }
-
-            fputcsv($current, $row, ',', '"', '\\');
-            $rowCount++;
-        }
-
-        if ($current) {
-            fclose($current);
-        }
-
-        fclose($temp);
-
-        return $files;
     }
 }

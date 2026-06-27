@@ -2,21 +2,20 @@
 
 namespace App\Worker;
 
-use App\Services\S3;
-use App\Services\Sqs;
-use App\Services\StudentImporter;
-use App\Services\StudentSubjectImporter;
+use App\Interfaces\ImporterInterface;
+use App\Interfaces\S3Interface;
+use App\Interfaces\SqsInterface;
 use PDO;
 
 final class Worker
 {
     public function __construct(
-        private readonly Sqs                    $sqs,
-        private readonly S3                     $s3,
-        private readonly PDO                    $pdo,
-        private readonly string                 $bucket,
-        private readonly StudentImporter        $students,
-        private readonly StudentSubjectImporter $subjects,
+        private readonly SqsInterface      $sqs,
+        private readonly S3Interface       $s3,
+        private readonly PDO               $pdo,
+        private readonly string            $bucket,
+        private readonly ImporterInterface $students,
+        private readonly ImporterInterface $subjects,
     )
     {
     }
@@ -27,17 +26,8 @@ final class Worker
 
         while (true) {
             try {
-                $messages = $this->sqs->receiveMessages();
-
-                if (empty($messages)) {
-                    sleep(2);
-                    continue;
-                }
-
-                foreach ($messages as $message) {
-                    $this->processMessage($message);
-                }
-
+                $this->processOnce();
+                sleep(2);
             } catch (\Throwable $e) {
                 echo "Worker error: {$e->getMessage()}\n";
                 sleep(5);
@@ -45,15 +35,22 @@ final class Worker
         }
     }
 
-    /**
-     * @throws \JsonException
-     * @throws \Exception
-     */
+    public function processOnce(): void
+    {
+        $messages = $this->sqs->receiveMessages();
+
+        if (empty($messages)) {
+            return;
+        }
+
+        foreach ($messages as $message) {
+            $this->processMessage($message);
+        }
+    }
+
     private function processMessage(array $message): void
     {
         $body = json_decode($message['Body'], true, flags: JSON_THROW_ON_ERROR);
-
-        echo "Worker " . getmypid() . " processing batch {$body['batch']}\n";
 
         $csv = $this->s3->getObject($this->bucket, $body['file']);
         $rows = $this->processCsv($csv);
@@ -84,7 +81,10 @@ final class Worker
         fgetcsv($stream, 0, ',', '"', '\\');
 
         while (($row = fgetcsv($stream, 0, ',', '"', '\\')) !== false) {
-            if ($row === [null]) continue;
+            if ($row === [null]) {
+                continue;
+            }
+
             $rows[] = $row;
         }
 
