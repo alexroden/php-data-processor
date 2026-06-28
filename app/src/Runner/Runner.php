@@ -10,6 +10,12 @@ use App\Interfaces\SqsInterface;
 
 final readonly class Runner
 {
+    /**
+     * @param S3Interface $s3
+     * @param SqsInterface $sqs
+     * @param CsvChunkerInterface $chunker
+     * @param string $bucket
+     */
     public function __construct(
         private S3Interface     $s3,
         private SqsInterface    $sqs,
@@ -17,6 +23,9 @@ final readonly class Runner
         private string $bucket,
     ) {}
 
+    /**
+     * @return void
+     */
     public function run(): void
     {
         echo "Runner started...\n";
@@ -43,6 +52,10 @@ final readonly class Runner
     }
 
     /**
+     * @param string $file
+     *
+     * @return void
+     *
      * @throws \Throwable
      */
     private function processFile(string $file): void
@@ -85,6 +98,11 @@ final readonly class Runner
         }
     }
 
+    /**
+     * @param array $files
+     *
+     * @return void
+     */
     private function sortFiles(array &$files): void
     {
         $priority = [
@@ -103,6 +121,10 @@ final readonly class Runner
     }
 
     /**
+     * @param callable $fn
+     *
+     * @return void
+     *
      * @throws \Throwable
      */
     private function retry(callable $fn): void

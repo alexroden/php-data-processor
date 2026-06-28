@@ -9,6 +9,14 @@ use PDO;
 
 final readonly class Worker
 {
+    /**
+     * @param SqsInterface $sqs
+     * @param S3Interface $s3
+     * @param PDO $pdo
+     * @param string $bucket
+     * @param ImporterInterface $students
+     * @param ImporterInterface $subjects
+     */
     public function __construct(
         private SqsInterface      $sqs,
         private S3Interface       $s3,
@@ -20,6 +28,9 @@ final readonly class Worker
     {
     }
 
+    /**
+     * @return void
+     */
     public function run(): void
     {
         echo "Worker started...\n";
@@ -35,6 +46,9 @@ final readonly class Worker
         }
     }
 
+    /**
+     * @return void
+     */
     public function processOnce(): void
     {
         $messages = $this->sqs->receiveMessages();
@@ -50,6 +64,11 @@ final readonly class Worker
         echo "Done.\n";
     }
 
+    /**
+     * @param array $message
+     *
+     * @return void
+     */
     private function processMessage(array $message): void
     {
         try {
@@ -79,6 +98,11 @@ final readonly class Worker
     }
 
     /**
+     * @param string $type
+     * @param array $rows
+     *
+     * @return void
+     *
      * @throws \Exception
      */
     private function route(string $type, array $rows): void
@@ -90,6 +114,11 @@ final readonly class Worker
         };
     }
 
+    /**
+     * @param string $csv
+     *
+     * @return array
+     */
     private function processCsv(string $csv): array
     {
         $stream = fopen('php://temp', 'r+');
@@ -113,6 +142,12 @@ final readonly class Worker
         return $rows;
     }
 
+    /**
+     * @param array $message
+     * @param string $file
+     *
+     * @return void
+     */
     private function safeCleanup(array $message, string $file): void
     {
         try {
@@ -127,7 +162,4 @@ final readonly class Worker
             echo "Failed to delete file: {$e->getMessage()}\n";
         }
     }
-
-
-
 }

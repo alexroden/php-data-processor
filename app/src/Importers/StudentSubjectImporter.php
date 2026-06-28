@@ -16,8 +16,16 @@ final class StudentSubjectImporter implements ImporterInterface
     const STUDENT_SUBJECT_PREDICTED_GRADE = 3;
     const STUDENT_SUBJECT_ACTUAL_GRADE = 4;
 
+    /**
+     * @param PDO $pdo
+     */
     public function __construct(private PDO $pdo) {}
 
+    /**
+     * @param array $rows
+     *
+     * @return void
+     */
     public function import(array $rows): void
     {
         $stmt = $this->pdo->prepare("
@@ -65,6 +73,9 @@ final class StudentSubjectImporter implements ImporterInterface
         }
     }
 
+    /**
+     * @return PDO
+     */
     public function getPdo(): \PDO
     {
         return $this->pdo;

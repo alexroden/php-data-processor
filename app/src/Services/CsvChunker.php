@@ -7,7 +7,10 @@ use Psr\Http\Message\StreamInterface;
 final class CsvChunker implements CsvChunkerInterface
 {
     /**
-     * @return string[] Temporary file paths
+     * @param StreamInterface $stream
+     * @param int $rowsPerChunk
+     *
+     * @return array
      */
     public function split(StreamInterface $stream, int $rowsPerChunk = 250): array
     {

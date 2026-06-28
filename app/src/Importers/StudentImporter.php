@@ -23,8 +23,16 @@ final class StudentImporter implements ImporterInterface
     const STUDENT_PARENT_PHONE = 9;
     const STUDENT_PARENT_EMAIL = 10;
 
+    /**
+     * @param PDO $pdo
+     */
     public function __construct(private PDO $pdo) {}
 
+    /**
+     * @param array $rows
+     *
+     * @return void
+     */
     public function import(array $rows): void
     {
         $insert = $this->pdo->prepare("
@@ -132,6 +140,9 @@ final class StudentImporter implements ImporterInterface
         }
     }
 
+    /**
+     * @return PDO
+     */
     public function getPdo(): \PDO
     {
         return $this->pdo;

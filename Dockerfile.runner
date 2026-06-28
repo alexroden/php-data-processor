@@ -8,10 +8,8 @@ RUN apt-get update && apt-get install -y \
 
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
-# Copy ONLY dependency files first
 COPY app/composer.json app/composer.lock ./
 
-# Install dependencies (FAST + cached)
 RUN composer install --no-interaction --prefer-dist --no-dev
 
 # THEN copy source code

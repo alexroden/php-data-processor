@@ -12,4 +12,9 @@ final class StudentSubjectImporterFake implements ImporterInterface
     {
         $this->calls[] = $rows;
     }
+
+    public function getPdo(): \PDO
+    {
+        return new PDOFake();
+    }
 }

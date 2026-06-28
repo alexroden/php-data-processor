@@ -3,7 +3,6 @@
 namespace Tests\Fakers;
 
 use App\Interfaces\S3Interface;
-use Psr\Http\Message\StreamInterface;
 
 final class S3Fake implements S3Interface
 {

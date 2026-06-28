@@ -6,18 +6,14 @@ RUN apt-get update && apt-get install -y \
     unzip git curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Install required PHP extensions (THIS IS THE FIX)
 RUN docker-php-ext-install pdo pdo_mysql
 
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
-# Copy ONLY dependency files first
 COPY app/composer.json app/composer.lock ./
 
-# Install dependencies (FAST + cached)
 RUN composer install --no-interaction --prefer-dist --no-dev
 
-# THEN copy source code
 COPY app/ ./
 
 CMD ["php", "worker/main.php"]

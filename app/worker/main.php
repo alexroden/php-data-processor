@@ -12,7 +12,6 @@ use Aws\Sqs\SqsClient;
 
 require __DIR__ . '/../vendor/autoload.php';
 
-
 $bucket = getenv('S3_BUCKET');
 
 $sqsClient = new SqsClient([

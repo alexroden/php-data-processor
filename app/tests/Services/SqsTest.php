@@ -9,7 +9,7 @@ use Tests\Fakers\SqsClientFake;
 
 class SqsTest extends TestCase
 {
-    public function test_add_messge(): void
+    public function test_add_message(): void
     {
         $spy = new SqsClientFake();
 

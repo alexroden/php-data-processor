@@ -4,6 +4,13 @@ namespace App\Importers\Traits;
 
 trait FailedJobs
 {
+    /**
+     * @param string $externalId
+     * @param string $file
+     * @param string $exception
+     *
+     * @return void
+     */
     private function submitFailedJob(string $externalId, string $file, string $exception): void
     {
         $pdo = $this->getPdo();
